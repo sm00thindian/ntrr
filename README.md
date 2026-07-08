@@ -112,9 +112,28 @@ TypeScript throughout. Accessible UI (WCAG-minded).
 
 ## Project status
 
-**Early bootstrap.** Vision and agent guidelines are defined; application code is not yet scaffolded.
+**Early bootstrap.** Vision, agent guidelines, and the [1.0 release plan](docs/RELEASE-1.0.md) are defined; application code is not yet scaffolded.
 
 This is a solo passion project — built incrementally, validated with real caregivers, with an emphasis on reliability over speed.
+
+**1.0 scope:** Google bidirectional sync + Apple CalDAV/Zapier bridge, family task board, unified dashboard, basic AI agents, responsive PWA. Microsoft sync ships in **1.1**.
+
+### Local development (M0+)
+
+```bash
+cp .env.example .env.local
+# 1. Start Supabase locally (requires Docker) — first run downloads images (~5 min)
+npm run db:start
+# 2. Copy keys into .env.local (or run: npx supabase status -o env)
+npm run db:status
+# 3. Reset only works while Supabase is running
+npm run db:reset
+npm run dev
+```
+
+Magic-link emails appear in Mailpit: [http://127.0.0.1:54324](http://127.0.0.1:54324)
+
+Open [http://localhost:3000](http://localhost:3000). Supabase Studio runs at [http://localhost:54323](http://localhost:54323).
 
 ---
 
