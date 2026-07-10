@@ -4,16 +4,21 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:lan": "node scripts/dev-lan.mjs",
     "dev:turbo": "next dev --turbopack",
+    "lan:sync": "node scripts/sync-lan-config.mjs",
+    "lan:restore": "node scripts/sync-lan-config.mjs --restore",
     "clean": "rm -rf .next",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "db:start": "npx supabase start",
+    "db:restart": "npx supabase stop && npx supabase start",
     "db:stop": "npx supabase stop",
     "db:reset": "npx supabase db reset",
     "db:status": "npx supabase status",
-    "db:types": "npx supabase gen types typescript --local > lib/supabase/database.types.ts"
+    "db:types": "npx supabase gen types typescript --local > lib/supabase/database.types.ts",
+    "digest:run": "curl -s -X POST http://localhost:3000/api/cron/digest -H \"Authorization: Bearer ${SYNC_CRON_SECRET:-}\" | jq ."
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.10",

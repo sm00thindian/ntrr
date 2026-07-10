@@ -34,6 +34,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_insights: {
+        Row: {
+          created_at: string
+          dedupe_key: string | null
+          dismissed_at: string | null
+          household_id: string
+          id: string
+          payload: Json
+          snoozed_until: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key?: string | null
+          dismissed_at?: string | null
+          household_id: string
+          id?: string
+          payload?: Json
+          snoozed_until?: string | null
+          type: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string | null
+          dismissed_at?: string | null
+          household_id?: string
+          id?: string
+          payload?: Json
+          snoozed_until?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_insights_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -162,6 +203,7 @@ export type Database = {
       }
       households: {
         Row: {
+          calendar_settings: Json
           created_at: string
           created_by: string
           id: string
@@ -169,6 +211,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          calendar_settings?: Json
           created_at?: string
           created_by: string
           id?: string
@@ -176,6 +219,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          calendar_settings?: Json
           created_at?: string
           created_by?: string
           id?: string

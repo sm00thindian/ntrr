@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { completeAuthCallback } from "@/lib/supabase/auth-callback";
+import { getRequestOrigin } from "@/lib/request-origin";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = getRequestOrigin(request);
   const next = searchParams.get("next") ?? "/dashboard";
   const destination = next.startsWith("/") ? next : "/dashboard";
 

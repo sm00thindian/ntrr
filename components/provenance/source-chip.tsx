@@ -14,8 +14,8 @@ export function SourceChip({ source }: { source: ProvenanceSource }) {
     <span
       className={cn(
         "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-        source === "ntrr" && "bg-primary/10 text-primary",
-        source === "google" && "bg-brand/10 text-brand",
+        source === "ntrr" && "bg-brand text-brand-foreground",
+        source === "google" && "bg-muted text-muted-foreground",
         source !== "ntrr" && source !== "google" && "bg-muted text-muted-foreground",
       )}
     >

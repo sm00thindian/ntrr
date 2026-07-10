@@ -1,3 +1,10 @@
+import {
+  fetchGoogleCalendarList,
+  getSelectedGoogleCalendarIds,
+  parseGoogleCalendarMappingId,
+  persistGoogleCalendarMetadata,
+  toGoogleCalendarMappingId,
+} from "@/lib/integrations/google/calendars";
 import { GoogleApiError, googleFetch } from "@/lib/integrations/google/client";
 import type { IntegrationAccount } from "@/lib/integrations/types";
 import { recordSyncConflict } from "@/lib/sync/conflict";
@@ -15,10 +22,37 @@ type GoogleEvent = {
   status?: string;
 };
 
-function eventProvenance(event: GoogleEvent) {
+const CALENDAR_SYNC_VERSION = 3;
+
+function getCalendarPullWindow() {
+  const rangeStart = new Date();
+  rangeStart.setDate(rangeStart.getDate() - 30);
+  const rangeEnd = new Date();
+  rangeEnd.setDate(rangeEnd.getDate() + 90);
+  return { rangeStart, rangeEnd };
+}
+
+function buildInitialCalendarPath(calendarId: string, rangeStart: Date, rangeEnd: Date) {
+  const params = new URLSearchParams({
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "250",
+    timeMin: rangeStart.toISOString(),
+    timeMax: rangeEnd.toISOString(),
+  });
+  return `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`;
+}
+
+function eventProvenance(
+  event: GoogleEvent,
+  calendarId: string,
+  calendarName: string,
+) {
   return {
     source: "google" as const,
     externalId: event.id,
+    calendarId,
+    calendarName,
     syncedAt: new Date().toISOString(),
     confidence: "high" as const,
     lastModifiedBy: "sync" as const,
@@ -41,14 +75,29 @@ function parseEventTimes(event: GoogleEvent) {
   };
 }
 
-export async function pullGoogleCalendar(account: IntegrationAccount) {
+function migrateSyncTokens(googleState: NonNullable<IntegrationAccount["metadata"]["google"]>) {
+  const tokens = { ...(googleState.calendarSyncTokens ?? {}) };
+
+  if (googleState.calendarSyncToken && !tokens.primary) {
+    tokens.primary = googleState.calendarSyncToken;
+  }
+
+  return tokens;
+}
+
+async function pullGoogleCalendarEvents(
+  account: IntegrationAccount,
+  calendarId: string,
+  calendarName: string,
+  syncToken: string | undefined,
+) {
   const admin = createAdminClient();
   const householdId = account.householdId;
-  const syncToken = account.metadata.google?.calendarSyncToken;
+  const { rangeStart, rangeEnd } = getCalendarPullWindow();
 
   const path = syncToken
-    ? `/calendar/v3/calendars/primary/events?syncToken=${encodeURIComponent(syncToken)}`
-    : "/calendar/v3/calendars/primary/events?singleEvents=true&maxResults=100&orderBy=startTime";
+    ? `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?syncToken=${encodeURIComponent(syncToken)}`
+    : buildInitialCalendarPath(calendarId, rangeStart, rangeEnd);
 
   let payload: {
     items?: GoogleEvent[];
@@ -59,19 +108,7 @@ export async function pullGoogleCalendar(account: IntegrationAccount) {
     payload = (await googleFetch(account, path)) as typeof payload;
   } catch (error) {
     if (error instanceof GoogleApiError && error.status === 410) {
-      await admin
-        .from("integration_accounts")
-        .update({
-          metadata: {
-            ...account.metadata,
-            google: { ...account.metadata.google, calendarSyncToken: undefined },
-          },
-        })
-        .eq("id", account.id);
-      return pullGoogleCalendar({
-        ...account,
-        metadata: { ...account.metadata, google: { ...account.metadata.google, calendarSyncToken: undefined } },
-      });
+      return pullGoogleCalendarEvents(account, calendarId, calendarName, undefined);
     }
     throw error;
   }
@@ -81,13 +118,15 @@ export async function pullGoogleCalendar(account: IntegrationAccount) {
       continue;
     }
 
+    const mappingExternalId = toGoogleCalendarMappingId(calendarId, item.id);
+
     const { data: mapping } = await admin
       .from("sync_mappings")
       .select("id, ntrr_id, external_etag")
       .eq("household_id", householdId)
       .eq("provider", "google")
       .eq("entity_type", "calendar_event")
-      .eq("external_id", item.id)
+      .eq("external_id", mappingExternalId)
       .maybeSingle();
 
     if (item.status === "cancelled") {
@@ -105,6 +144,7 @@ export async function pullGoogleCalendar(account: IntegrationAccount) {
 
     const title = item.summary ?? "Untitled event";
     const remoteUpdatedAt = item.updated ? new Date(item.updated).toISOString() : null;
+    const provenance = eventProvenance(item, calendarId, calendarName);
 
     if (mapping?.ntrr_id) {
       const { data: localEvent } = await admin
@@ -141,7 +181,7 @@ export async function pullGoogleCalendar(account: IntegrationAccount) {
           starts_at: times.startsAt,
           ends_at: times.endsAt,
           all_day: times.allDay,
-          provenance: eventProvenance(item),
+          provenance,
         })
         .eq("id", mapping.ntrr_id);
 
@@ -163,7 +203,7 @@ export async function pullGoogleCalendar(account: IntegrationAccount) {
           starts_at: times.startsAt,
           ends_at: times.endsAt,
           all_day: times.allDay,
-          provenance: eventProvenance(item),
+          provenance,
         })
         .select("id")
         .single();
@@ -174,7 +214,7 @@ export async function pullGoogleCalendar(account: IntegrationAccount) {
           provider: "google",
           entity_type: "calendar_event",
           ntrr_id: created.id,
-          external_id: item.id,
+          external_id: mappingExternalId,
           external_etag: item.etag ?? null,
           external_updated_at: remoteUpdatedAt,
         });
@@ -182,17 +222,74 @@ export async function pullGoogleCalendar(account: IntegrationAccount) {
     }
   }
 
-  if (payload.nextSyncToken) {
-    await admin
-      .from("integration_accounts")
-      .update({
-        metadata: {
-          ...account.metadata,
-          google: { ...account.metadata.google, calendarSyncToken: payload.nextSyncToken },
-        },
-      })
-      .eq("id", account.id);
+  return payload.nextSyncToken;
+}
+
+export async function pullGoogleCalendar(account: IntegrationAccount) {
+  const admin = createAdminClient();
+  const googleState = account.metadata.google ?? {};
+  const needsResync = (googleState.calendarSyncVersion ?? 1) < CALENDAR_SYNC_VERSION;
+
+  let calendars = googleState.calendars;
+  if (!calendars?.length) {
+    calendars = await fetchGoogleCalendarList(account);
   }
+
+  const selectedCalendarIds = getSelectedGoogleCalendarIds(account);
+  const calendarNameById = new Map(calendars.map((calendar) => [calendar.id, calendar.summary]));
+
+  let syncTokens = migrateSyncTokens(googleState);
+  if (needsResync) {
+    syncTokens = {};
+  }
+
+  const nextSyncTokens: Record<string, string> = { ...syncTokens };
+
+  for (const calendarId of selectedCalendarIds) {
+    const calendarName = calendarNameById.get(calendarId) ?? calendarId;
+    const syncToken = needsResync ? undefined : syncTokens[calendarId];
+    const nextToken = await pullGoogleCalendarEvents(
+      account,
+      calendarId,
+      calendarName,
+      syncToken,
+    );
+
+    if (nextToken) {
+      nextSyncTokens[calendarId] = nextToken;
+    }
+  }
+
+  const nextGoogleState = {
+    ...googleState,
+    calendars,
+    selectedCalendarIds,
+    calendarSyncVersion: CALENDAR_SYNC_VERSION,
+    calendarSyncTokens: nextSyncTokens,
+    calendarSyncToken: undefined,
+  };
+
+  await admin
+    .from("integration_accounts")
+    .update({
+      metadata: {
+        ...account.metadata,
+        google: nextGoogleState,
+      },
+    })
+    .eq("id", account.id);
+
+  await persistGoogleCalendarMetadata(
+    { ...account, metadata: { ...account.metadata, google: nextGoogleState } },
+    calendars,
+    selectedCalendarIds,
+  );
+}
+
+function getPushCalendarId(account: IntegrationAccount) {
+  const selected = getSelectedGoogleCalendarIds(account);
+  const primary = account.metadata.google?.calendars?.find((calendar) => calendar.primary)?.id;
+  return primary && selected.includes(primary) ? primary : selected[0] ?? "primary";
 }
 
 export async function pushGoogleCalendarEvent(
@@ -205,6 +302,7 @@ export async function pushGoogleCalendarEvent(
 ) {
   const admin = createAdminClient();
   const householdId = account.householdId;
+  const pushCalendarId = getPushCalendarId(account);
 
   const { data: mapping } = await admin
     .from("sync_mappings")
@@ -220,10 +318,15 @@ export async function pushGoogleCalendarEvent(
       return;
     }
 
+    const { calendarId, eventId } = parseGoogleCalendarMappingId(mapping.external_id);
+    const targetCalendarId = calendarId === "primary" && !mapping.external_id.includes(":")
+      ? pushCalendarId
+      : calendarId;
+
     try {
       await googleFetch(
         account,
-        `/calendar/v3/calendars/primary/events/${encodeURIComponent(mapping.external_id)}`,
+        `/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events/${encodeURIComponent(eventId)}`,
         { method: "DELETE", etag: mapping.external_etag ?? undefined },
       );
     } catch (error) {
@@ -258,10 +361,15 @@ export async function pushGoogleCalendarEvent(
   };
 
   if (mapping?.external_id) {
+    const { calendarId, eventId } = parseGoogleCalendarMappingId(mapping.external_id);
+    const targetCalendarId = calendarId === "primary" && !mapping.external_id.includes(":")
+      ? pushCalendarId
+      : calendarId;
+
     try {
       const updated = (await googleFetch(
         account,
-        `/calendar/v3/calendars/primary/events/${encodeURIComponent(mapping.external_id)}`,
+        `/calendar/v3/calendars/${encodeURIComponent(targetCalendarId)}/events/${encodeURIComponent(eventId)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -295,11 +403,15 @@ export async function pushGoogleCalendarEvent(
     return;
   }
 
-  const created = (await googleFetch(account, "/calendar/v3/calendars/primary/events", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })) as GoogleEvent;
+  const created = (await googleFetch(
+    account,
+    `/calendar/v3/calendars/${encodeURIComponent(pushCalendarId)}/events`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  )) as GoogleEvent;
 
   if (!created.id) {
     return;
@@ -311,7 +423,7 @@ export async function pushGoogleCalendarEvent(
       provider: "google",
       entity_type: "calendar_event",
       ntrr_id: entry.entityId,
-      external_id: created.id,
+      external_id: toGoogleCalendarMappingId(pushCalendarId, created.id),
       external_etag: created.etag ?? null,
       external_updated_at: created.updated ? new Date(created.updated).toISOString() : null,
     },

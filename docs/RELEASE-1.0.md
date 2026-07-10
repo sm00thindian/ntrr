@@ -312,21 +312,22 @@ sequenceDiagram
 
 ### M4 checklist
 
-- [ ] CalDAV connect wizard
-- [ ] Zapier/Make webhook endpoint
-- [ ] Dashboard: today's priorities
-- [ ] Dashboard: family status
-- [ ] Dashboard: AI highlights slot
-- [ ] Unified day/agenda view
+- [x] CalDAV connect wizard
+- [x] Zapier/Make webhook endpoint
+- [x] Dashboard: today's priorities
+- [x] Dashboard: family status
+- [x] Dashboard: AI highlights slot
+- [x] Unified day/agenda view
+- [x] Week calendar view (`/calendar`)
 
 ### M5 checklist
 
-- [ ] Daily digest Edge Function
-- [ ] Conflict detector agent
-- [ ] Reminder suggester agent
-- [ ] Schedule overlap agent
-- [ ] Dismiss/snooze UX
-- [ ] Loading/error states on AI panels
+- [x] Daily digest cron route (`/api/cron/digest` + `vercel.json`)
+- [x] Conflict detector agent
+- [x] Reminder suggester agent
+- [x] Schedule overlap agent
+- [x] Dismiss/snooze UX
+- [x] Loading/error states on AI panels
 
 ### M6 checklist
 

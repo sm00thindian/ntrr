@@ -1,7 +1,10 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppleCalDavConnectCard } from "@/components/integrations/apple-caldav-connect-card";
 import { GoogleConnectCard } from "@/components/integrations/google-connect-card";
+import { ZapierWebhookCard } from "@/components/integrations/zapier-webhook-card";
 import { requireHouseholdContext } from "@/lib/households/context";
 import { isGoogleConfigured } from "@/lib/integrations/google/scopes";
+import { getGoogleCalendarSettingsForUi } from "@/lib/households/calendar-settings";
 import { getHouseholdIntegration } from "@/lib/integrations/queries";
 import { canManageIntegrations } from "@/lib/permissions/roles";
 
@@ -32,9 +35,21 @@ export default async function SettingsPage({
   const params = await searchParams;
   const feedback = feedbackFromSearchParams(params);
 
-  const googleIntegration = canManage
-    ? await getHouseholdIntegration(ctx.householdId, "google")
-    : null;
+  const [googleIntegration, appleIntegration] = canManage
+    ? await Promise.all([
+        getHouseholdIntegration(ctx.householdId, "google"),
+        getHouseholdIntegration(ctx.householdId, "apple_caldav"),
+      ])
+    : [null, null];
+
+  let googleCalendarSettings: Awaited<ReturnType<typeof getGoogleCalendarSettingsForUi>> = null;
+  if (canManage && googleIntegration?.status === "connected") {
+    try {
+      googleCalendarSettings = await getGoogleCalendarSettingsForUi(ctx.householdId);
+    } catch {
+      googleCalendarSettings = null;
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -58,19 +73,19 @@ export default async function SettingsPage({
           configured={isGoogleConfigured()}
           integration={googleIntegration}
           feedback={feedback}
+          calendars={googleCalendarSettings?.calendars}
+          selectedCalendarIds={googleCalendarSettings?.selectedCalendarIds}
+          members={googleCalendarSettings?.members}
+          memberColors={googleCalendarSettings?.memberColors}
+          calendarAssignments={googleCalendarSettings?.calendarAssignments}
         />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Apple (CalDAV)</CardTitle>
-            <CardDescription>iCloud calendar bridge — M4.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {canManage ? "Not connected" : "Connect unavailable for your role"}
-            </p>
-          </CardContent>
-        </Card>
+        <AppleCalDavConnectCard canManage={canManage} integration={appleIntegration} />
+
+        <ZapierWebhookCard
+          householdId={ctx.householdId}
+          configured={Boolean(process.env.ZAPIER_WEBHOOK_SECRET)}
+        />
 
         <Card>
           <CardHeader>

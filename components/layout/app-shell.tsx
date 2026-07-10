@@ -20,52 +20,38 @@ export function AppShell({
   return (
     <div className="min-h-dvh bg-background">
       <div className="mx-auto flex min-h-dvh w-full max-w-7xl">
-        <aside className="bg-sidebar text-sidebar-foreground hidden w-64 shrink-0 px-4 py-6 lg:flex lg:flex-col">
-          <div className="mb-8">
-            <Logo href="/dashboard" variant="inverse" size="lg" />
-            {householdName ? (
-              <p className="mt-3 text-sm font-medium text-white/90">{householdName}</p>
-            ) : null}
-            <p className="font-display text-sidebar-muted mt-1 text-xs">
-              {householdRole ? `${householdRole} · ` : ""}
-              Family Care Orchestrator
-            </p>
+        <aside className="bg-sidebar text-sidebar-foreground border-sidebar-border hidden w-56 shrink-0 border-r px-4 py-6 lg:flex lg:flex-col">
+          <div className="mb-10">
+            <Logo href="/dashboard" size="lg" />
           </div>
           <AppNav variant="sidebar" />
-          <div className="mt-auto space-y-3 border-t border-white/10 pt-4">
+          <div className="border-sidebar-border mt-auto space-y-3 border-t pt-4">
             {userEmail ? (
-              <p className="text-sidebar-muted truncate text-xs" title={userEmail}>
+              <p className="text-sidebar-muted truncate text-xs leading-relaxed" title={userEmail}>
                 {userEmail}
               </p>
             ) : null}
-            <SignOutButton className="text-sidebar-muted hover:bg-white/10 hover:text-white" />
+            <SignOutButton className="text-sidebar-muted hover:bg-sidebar-accent hover:text-foreground" />
           </div>
         </aside>
 
         <div className="flex min-h-dvh flex-1 flex-col">
-          <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b bg-card/90 px-4 py-3 backdrop-blur lg:px-8">
+          <header className="safe-top sticky top-0 z-40 flex items-center justify-between border-b border-border/60 bg-background/95 px-4 py-4 backdrop-blur lg:px-8">
             <div className="flex items-center gap-3 lg:hidden">
               <Logo href="/dashboard" size="md" />
             </div>
             <div className="hidden min-w-0 flex-1 lg:block">
-              <p className="font-display text-muted-foreground text-xs">Family Care Orchestrator</p>
-              <p className="truncate text-sm font-medium">
-                {householdName ? (
-                  <>
-                    {householdName}
-                    {householdRole ? (
-                      <span className="text-muted-foreground font-normal"> · {householdRole}</span>
-                    ) : null}
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">
-                    Calm coordination for caregiving families
-                  </span>
-                )}
+              <p className="font-display text-muted-foreground text-xs tracking-wide">
+                {householdName
+                  ? `${householdName}${householdRole ? ` · ${householdRole}` : ""}`
+                  : "ntrr"}
               </p>
+              <h1 className="font-display text-2xl font-bold tracking-tight">
+                Family Care Orchestrator
+              </h1>
             </div>
             <div className="flex items-center gap-2">
-              <AppIcon size={28} className="lg:hidden" />
+              <AppIcon size={32} />
               <div className="lg:hidden">
                 <SignOutButton variant="ghost" />
               </div>

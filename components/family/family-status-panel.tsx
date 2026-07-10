@@ -4,13 +4,14 @@ import { RoleBadge } from "@/components/family/role-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { FamilyStatus } from "@/lib/households/queries";
+import { cn } from "@/lib/utils";
 
 export function FamilyStatusPanel({ status }: { status: FamilyStatus }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
         <div>
-          <CardTitle>Family status</CardTitle>
+          <CardTitle>Family overview</CardTitle>
           <CardDescription>
             {status.memberCount} member{status.memberCount === 1 ? "" : "s"}
             {status.pendingInviteCount > 0
@@ -27,7 +28,10 @@ export function FamilyStatusPanel({ status }: { status: FamilyStatus }) {
           {status.members.map((member) => (
             <li
               key={member.userId}
-              className="flex items-center justify-between gap-2 rounded-md border px-3 py-2"
+              className={cn(
+                "flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5",
+                member.isCurrentUser ? "border-brand/25 bg-brand/8" : "bg-card",
+              )}
             >
               <span className="truncate text-sm">
                 {member.email}

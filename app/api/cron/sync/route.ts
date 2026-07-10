@@ -1,16 +1,25 @@
 import { NextResponse } from "next/server";
 
+import { isAuthorizedCron } from "@/lib/cron/auth";
 import { runAllGoogleSyncs } from "@/lib/sync/orchestrator";
 
-export async function POST(request: Request) {
-  const secret = process.env.SYNC_CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
+async function handleSync() {
+  const results = await runAllGoogleSyncs();
+  return NextResponse.json({ ok: true, results });
+}
 
-  if (!secret || authHeader !== `Bearer ${secret}`) {
+export async function GET(request: Request) {
+  if (!isAuthorizedCron(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const results = await runAllGoogleSyncs();
+  return handleSync();
+}
 
-  return NextResponse.json({ ok: true, results });
+export async function POST(request: Request) {
+  if (!isAuthorizedCron(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  return handleSync();
 }

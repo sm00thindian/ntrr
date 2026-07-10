@@ -27,6 +27,8 @@ enabled = true
 enabled = true
 site_url = "http://localhost:3000"
 additional_redirect_urls = [
+  # BEGIN LAN (auto-managed by npm run dev:lan — do not edit)
+  # END LAN
   "http://localhost:3000/auth/callback",
   "http://127.0.0.1:3000/auth/callback",
   "http://localhost:3000/auth/callback/**",
@@ -39,3 +41,7 @@ enable_anonymous_sign_ins = false
 [auth.email]
 enable_signup = true
 enable_confirmations = false
+
+[auth.email.template.magic_link]
+subject = "Your NTRR sign-in link"
+content_path = "./supabase/templates/magic_link.html"

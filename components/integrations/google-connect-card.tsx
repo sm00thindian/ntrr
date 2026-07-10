@@ -5,14 +5,21 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { GoogleCalendarSettings } from "@/components/integrations/google-calendar-settings";
 import { disconnectGoogle, syncGoogleNow } from "@/lib/integrations/actions";
-import type { IntegrationAccount } from "@/lib/integrations/types";
+import type { CalendarColorMember, GoogleCalendarAssignment } from "@/lib/calendar/colors";
+import type { GoogleCalendarInfo, IntegrationAccount } from "@/lib/integrations/types";
 
 type GoogleConnectCardProps = {
   canManage: boolean;
   configured: boolean;
   integration: IntegrationAccount | null;
   feedback?: string | null;
+  calendars?: GoogleCalendarInfo[];
+  selectedCalendarIds?: string[];
+  members?: CalendarColorMember[];
+  memberColors?: Record<string, string>;
+  calendarAssignments?: Record<string, GoogleCalendarAssignment>;
 };
 
 function statusLabel(integration: IntegrationAccount | null) {
@@ -37,6 +44,11 @@ export function GoogleConnectCard({
   configured,
   integration,
   feedback,
+  calendars = [],
+  selectedCalendarIds = [],
+  members = [],
+  memberColors = {},
+  calendarAssignments = {},
 }: GoogleConnectCardProps) {
   const [pending, startTransition] = useTransition();
   const connected = integration?.status === "connected";
@@ -63,6 +75,16 @@ export function GoogleConnectCard({
           <p className="text-sm text-muted-foreground" role="status">
             {feedback}
           </p>
+        ) : null}
+
+        {connected && calendars.length && members.length ? (
+          <GoogleCalendarSettings
+            calendars={calendars}
+            selectedCalendarIds={selectedCalendarIds}
+            members={members}
+            memberColors={memberColors}
+            calendarAssignments={calendarAssignments}
+          />
         ) : null}
 
         {canManage ? (

@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { AiHighlightsPanel } from "@/components/dashboard/ai-highlights-panel";
+import { DayAgenda } from "@/components/dashboard/day-agenda";
 import { FamilyStatusPanel } from "@/components/family/family-status-panel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateHouseholdForm } from "@/components/household/create-household-form";
+
+import { getTodayAgenda } from "@/lib/dashboard/agenda";
 import { getFamilyStatus, getUserMembership } from "@/lib/households/queries";
 import { getPendingConflictCount } from "@/lib/sync/conflict";
-import { getTodayTaskCount } from "@/lib/tasks/queries";
 import { upsertProfile } from "@/lib/profiles/actions";
 import { createClient } from "@/lib/supabase/server";
 
@@ -40,38 +43,49 @@ export default async function DashboardPage() {
     );
   }
 
-  const [familyStatus, todayTaskCount, conflictCount] = await Promise.all([
+  const [familyStatus, agenda, conflictCount] = await Promise.all([
     getFamilyStatus(membership.householdId, user.id),
-    getTodayTaskCount(membership.householdId),
+    getTodayAgenda(membership.householdId),
     getPendingConflictCount(membership.householdId),
   ]);
 
+  const priorities = agenda.slice(0, 4);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Today</h1>
-        <p className="mt-1 text-muted-foreground">
-          {membership.householdName} · {membership.role}
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>Today&apos;s priorities</CardTitle>
             <CardDescription>Tasks and events that need attention now.</CardDescription>
           </CardHeader>
           <CardContent>
-            {todayTaskCount > 0 ? (
-              <p className="text-sm">
-                <span className="text-2xl font-semibold">{todayTaskCount}</span>{" "}
-                <span className="text-muted-foreground">
-                  task{todayTaskCount === 1 ? "" : "s"} due or active today
-                </span>
-              </p>
+            {priorities.length ? (
+              <ul className="relative space-y-0">
+                {priorities.map((item, index) => (
+                  <li key={item.id} className="relative flex gap-3 pb-4 last:pb-0">
+                    {index < priorities.length - 1 ? (
+                      <span
+                        className="bg-brand absolute top-3 left-[5px] h-[calc(100%-4px)] w-0.5"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <span
+                      className="bg-brand relative z-10 mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full"
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 pt-0.5">
+                      <p className="truncate text-sm font-medium">{item.title}</p>
+                      <p className="text-muted-foreground text-xs">
+                        {item.kind === "event" ? "Calendar event" : "Task"}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No urgent tasks today. Add items on the task board.
+                Nothing urgent today. Connect calendars in Settings to see priorities here.
               </p>
             )}
           </CardContent>
@@ -79,7 +93,7 @@ export default async function DashboardPage() {
 
         <FamilyStatusPanel status={familyStatus} />
 
-        <Card className="md:col-span-2 xl:col-span-1">
+        <Card>
           <CardHeader>
             <CardTitle>Sync status</CardTitle>
             <CardDescription>Google Calendar + Tasks conflicts need your confirmation.</CardDescription>
@@ -99,11 +113,15 @@ export default async function DashboardPage() {
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                No sync conflicts. Connect Google in Settings to start bidirectional sync.
+                No sync conflicts. Connect calendars in Settings and run sync to keep everyone aligned.
               </p>
             )}
           </CardContent>
         </Card>
+
+        <DayAgenda items={agenda} />
+
+        <AiHighlightsPanel householdId={membership.householdId} />
       </div>
     </div>
   );

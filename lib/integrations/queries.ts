@@ -10,6 +10,7 @@ type IntegrationRow = {
   status: IntegrationAccount["status"];
   scopes: string[] | null;
   metadata: Record<string, unknown>;
+  created_by: string;
   created_at: string;
   updated_at: string;
 };
@@ -28,6 +29,7 @@ function mapIntegration(row: IntegrationRow): IntegrationAccount {
     status: row.status,
     scopes: row.scopes,
     metadata,
+    createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -41,7 +43,7 @@ export async function getHouseholdIntegration(
 
   const { data, error } = await supabase
     .from("integration_accounts")
-    .select("id, household_id, provider, status, scopes, metadata, created_at, updated_at")
+    .select("id, household_id, provider, status, scopes, metadata, created_by, created_at, updated_at")
     .eq("household_id", householdId)
     .eq("provider", provider)
     .maybeSingle();
@@ -63,6 +65,31 @@ export async function getConnectedGoogleIntegration(
   return account;
 }
 
+export async function getConnectedAppleCalDavIntegrationAdmin(
+  householdId: string,
+): Promise<IntegrationAccount | null> {
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("integration_accounts")
+    .select("id, household_id, provider, status, scopes, metadata, created_by, created_at, updated_at")
+    .eq("household_id", householdId)
+    .eq("provider", "apple_caldav")
+    .eq("status", "connected")
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  const account = mapIntegration(data as IntegrationRow);
+  if (!account.metadata.apple?.credentials) {
+    return null;
+  }
+
+  return account;
+}
+
 export async function getConnectedGoogleIntegrationAdmin(
   householdId: string,
 ): Promise<IntegrationAccount | null> {
@@ -70,7 +97,7 @@ export async function getConnectedGoogleIntegrationAdmin(
 
   const { data, error } = await admin
     .from("integration_accounts")
-    .select("id, household_id, provider, status, scopes, metadata, created_at, updated_at")
+    .select("id, household_id, provider, status, scopes, metadata, created_by, created_at, updated_at")
     .eq("household_id", householdId)
     .eq("provider", "google")
     .eq("status", "connected")

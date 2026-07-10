@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 import { connectGoogleAccount } from "@/lib/integrations/google/client";
 import { exchangeGoogleCode } from "@/lib/integrations/google/oauth";
-import { runGoogleSync } from "@/lib/sync/orchestrator";
+import { runHouseholdSync } from "@/lib/sync/orchestrator";
 
 export async function GET(request: Request) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       expiresIn: tokens.expires_in,
     });
 
-    await runGoogleSync(context.householdId);
+    await runHouseholdSync(context.householdId);
 
     return NextResponse.redirect(new URL("/settings?connected=google", siteUrl));
   } catch (error) {

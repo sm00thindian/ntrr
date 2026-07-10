@@ -21,7 +21,7 @@ export function Logo({ className, href = "/dashboard", size = "md", variant = "d
       className={cn(
         "font-display inline-flex items-baseline font-bold lowercase tracking-tight",
         sizes[size],
-        variant === "inverse" ? "text-white" : "text-foreground",
+        variant === "inverse" ? "text-primary-foreground" : "text-foreground",
         className,
       )}
     >

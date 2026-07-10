@@ -22,12 +22,19 @@ export function LoginForm({ next, initialError }: LoginFormProps) {
   const [pending, startTransition] = useTransition();
 
   function buildCallbackUrl() {
-    const base = `${window.location.origin}/auth/callback`;
+    const url = new URL("/auth/callback", window.location.origin);
+    // Ensures magic-link emails can append &token_hash=… (see supabase/templates/magic_link.html)
+    url.searchParams.set("flow", "magiclink");
     if (next && next.startsWith("/")) {
-      return `${base}?next=${encodeURIComponent(next)}`;
+      url.searchParams.set("next", next);
     }
-    return base;
+    return url.toString();
   }
+
+  const mailpitUrl =
+    typeof window !== "undefined"
+      ? `${window.location.protocol}//${window.location.hostname}:54324`
+      : "http://127.0.0.1:54324";
 
   return (
     <Card className="w-full max-w-md border-border/80 shadow-md">
@@ -129,7 +136,7 @@ export function LoginForm({ next, initialError }: LoginFormProps) {
 
         <p className="text-xs text-muted-foreground">
           Local dev: magic links arrive in{" "}
-          <a href="http://127.0.0.1:54324" className="underline" target="_blank" rel="noreferrer">
+          <a href={mailpitUrl} className="underline" target="_blank" rel="noreferrer">
             Mailpit
           </a>
           . Request the link and open it in this same browser.

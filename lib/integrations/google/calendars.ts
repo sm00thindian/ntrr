@@ -1,0 +1,170 @@
+import { googleFetch } from "@/lib/integrations/google/client";
+import { getConnectedGoogleIntegrationAdmin } from "@/lib/integrations/queries";
+import type { GoogleCalendarInfo, IntegrationAccount } from "@/lib/integrations/types";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+type GoogleCalendarListResponse = {
+  items?: Array<{
+    id: string;
+    summary?: string;
+    primary?: boolean;
+    backgroundColor?: string;
+    accessRole?: string;
+    selected?: boolean;
+  }>;
+};
+
+export function getSelectedGoogleCalendarIds(account: IntegrationAccount): string[] {
+  const ids = account.metadata.google?.selectedCalendarIds;
+  if (ids?.length) {
+    return ids;
+  }
+  return ["primary"];
+}
+
+export function toGoogleCalendarMappingId(calendarId: string, eventId: string) {
+  return `${calendarId}:${eventId}`;
+}
+
+export function parseGoogleCalendarMappingId(externalId: string) {
+  const separator = externalId.indexOf(":");
+  if (separator === -1) {
+    return { calendarId: "primary", eventId: externalId };
+  }
+
+  return {
+    calendarId: externalId.slice(0, separator),
+    eventId: externalId.slice(separator + 1),
+  };
+}
+
+export async function fetchGoogleCalendarList(
+  account: IntegrationAccount,
+): Promise<GoogleCalendarInfo[]> {
+  const payload = (await googleFetch(
+    account,
+    "/calendar/v3/users/me/calendarList?minAccessRole=reader&showHidden=false",
+  )) as GoogleCalendarListResponse;
+
+  return (payload.items ?? [])
+    .filter((item) => item.id && item.summary)
+    .map((item) => ({
+      id: item.id,
+      summary: item.summary ?? "Untitled calendar",
+      primary: item.primary,
+      backgroundColor: item.backgroundColor,
+    }))
+    .sort((left, right) => {
+      if (left.primary) return -1;
+      if (right.primary) return 1;
+      return left.summary.localeCompare(right.summary);
+    });
+}
+
+export async function persistGoogleCalendarMetadata(
+  account: IntegrationAccount,
+  calendars: GoogleCalendarInfo[],
+  selectedCalendarIds?: string[],
+) {
+  const admin = createAdminClient();
+  const googleState = account.metadata.google ?? {};
+  const primaryId = calendars.find((calendar) => calendar.primary)?.id ?? "primary";
+
+  const nextSelected =
+    selectedCalendarIds ??
+    (googleState.selectedCalendarIds?.length
+      ? googleState.selectedCalendarIds.filter((id) => calendars.some((calendar) => calendar.id === id))
+      : [primaryId]);
+
+  const safeSelected = nextSelected.length ? nextSelected : [primaryId];
+
+  await admin
+    .from("integration_accounts")
+    .update({
+      metadata: {
+        ...account.metadata,
+        google: {
+          ...googleState,
+          calendars,
+          selectedCalendarIds: safeSelected,
+        },
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", account.id);
+
+  return safeSelected;
+}
+
+export async function getGoogleCalendarSettings(householdId: string) {
+  const account = await getConnectedGoogleIntegrationAdmin(householdId);
+  if (!account) {
+    return null;
+  }
+
+  const calendars = await fetchGoogleCalendarList(account);
+  const selectedCalendarIds = getSelectedGoogleCalendarIds(account).filter((id) =>
+    calendars.some((calendar) => calendar.id === id),
+  );
+  const safeSelected = selectedCalendarIds.length
+    ? selectedCalendarIds
+    : [calendars.find((calendar) => calendar.primary)?.id ?? "primary"];
+
+  await persistGoogleCalendarMetadata(account, calendars, safeSelected);
+
+  return {
+    calendars,
+    selectedCalendarIds: safeSelected,
+    connectedByUserId: account.createdBy,
+  };
+}
+
+export async function removeSyncedEventsForCalendars(
+  householdId: string,
+  calendarIds: string[],
+) {
+  if (!calendarIds.length) {
+    return;
+  }
+
+  const admin = createAdminClient();
+
+  const { data: events } = await admin
+    .from("calendar_events")
+    .select("id, provenance")
+    .eq("household_id", householdId);
+
+  const removedIds = new Set<string>();
+
+  for (const event of events ?? []) {
+    const provenance = event.provenance as { source?: string; calendarId?: string; externalId?: string };
+    if (provenance.source !== "google") {
+      continue;
+    }
+
+    const calendarId = provenance.calendarId ?? "primary";
+    const legacyMatch =
+      !provenance.calendarId &&
+      calendarIds.includes("primary") &&
+      provenance.externalId &&
+      !provenance.externalId.includes(":");
+
+    if (calendarIds.includes(calendarId) || legacyMatch) {
+      removedIds.add(event.id as string);
+    }
+  }
+
+  if (!removedIds.size) {
+    return;
+  }
+
+  const ids = [...removedIds];
+
+  await admin
+    .from("sync_mappings")
+    .delete()
+    .eq("household_id", householdId)
+    .eq("entity_type", "calendar_event")
+    .in("ntrr_id", ids);
+  await admin.from("calendar_events").delete().in("id", ids);
+}
